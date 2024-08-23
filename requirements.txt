@@ -1,0 +1,14 @@
+ipykernel
+flake8
+autopep8
+isort
+black
+
+PyYaml
+numpy
+pandas
+scipy
+PySpark
+statsmodels
+
+matplotlib
