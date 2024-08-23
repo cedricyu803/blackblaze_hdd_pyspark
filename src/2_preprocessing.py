@@ -111,6 +111,8 @@ df_cycle_id.toPandas().to_csv(CYCLE_ID_FILEPATH)
 
 gc.collect()
 
+df.write.csv(PREPROCESSED_FILEPATH, header=True)
+
 spark.stop()
 
 print(f'Columns dropped: {cols_to_drop}')
