@@ -6,7 +6,6 @@ from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
 na_frac_cutoff = 0.4
-num_lags = 3
 
 
 RANDOM_SEED = int(os.getenv('RANDOM_SEED', 42))
@@ -18,12 +17,6 @@ CYCLE_ID_FILEPATH = os.path.join(DATA_DIR, 'cycle_id.csv')
 CYCLE_ID_FAILURE_FILEPATH = os.path.join(DATA_DIR, 'cycle_id_failure.csv')
 os.path.exists(DATA_FILEPATH)
 PREPROCESSED_FILEPATH = os.path.join(DATA_DIR, 'harddrive_preprocessed')
-TRAINING_FILEPATH = os.path.join(DATA_DIR, 'harddrive_training.csv')
-
-date_col = 'date'
-target_label = 'failure'
-id_cols = ['serial_number', 'model']
-cycle_id_col = 'cycle_id'
 
 
 def get_less_na_cols(df, na_frac_cutoff: float = 0.4):
@@ -42,12 +35,9 @@ def get_less_na_cols(df, na_frac_cutoff: float = 0.4):
     return cols_to_keep
 
 
-def lag_feature(df, col, offset: int = 1,
-                group_cols=cycle_id_col,
-                sort_cols=date_col):
-    window = Window.partitionBy(group_cols).orderBy(sort_cols)
-    return (df.withColumn(col + f"_lag_{n+1}",
-                          F.lag(col, offset=offset).over(window)))
+date_col = 'date'
+target_label = 'failure'
+id_cols = ['serial_number', 'model']
 
 
 spark = (SparkSession.builder
@@ -82,6 +72,7 @@ df = df.select(cols_to_keep)
 # assign cycle_ids: for each id_column value, two cycles are separated by
 # more than 1 day
 datediff_col = 'datediff'
+cycle_id_col = "cycle_id"
 datediff_by_id_cols = (df.select(*(id_cols + [date_col]))
                        .withColumn(
     date_col +
@@ -122,8 +113,6 @@ df_cycle_id.toPandas().to_csv(CYCLE_ID_FILEPATH,
 
 gc.collect()
 
-
-# get cycles with failures
 df_cycle_id_failure = (df_cycle_id.join(
     df.select(*(id_cols + [date_col, target_label])),
     on=id_cols + [date_col],
@@ -135,7 +124,7 @@ df_cycle_id_failure = (df_cycle_id_failure
                        .dropDuplicates().sort(cycle_id_col))
 df_cycle_id_failure = df_cycle_id.join(df_cycle_id_failure,
                                        on=cycle_id_col, how='inner')
-df_cycle_id_failure.cache()
+
 
 df_cycle_id_failure.toPandas().to_csv(CYCLE_ID_FAILURE_FILEPATH,
                                       index=False)
@@ -144,36 +133,6 @@ gc.collect()
 
 df.write.csv(PREPROCESSED_FILEPATH, header=True, mode='overwrite')
 
-
-# only keep failed cycles for training
-df_training = df.join(
-    df_cycle_id_failure,
-    on=id_cols + [date_col], how='inner'
-).sort(id_cols + [date_col, cycle_id_col])
-
-# drop constant columns
-col_value_counts = df_training.agg(*(F.countDistinct(F.col(c)).alias(c)
-                                     for c in df_training.columns)).cache()
-df_col_value_counts = col_value_counts.toPandas()
-const_cols = list(
-    df_col_value_counts[df_col_value_counts < 2].T.dropna().index)
-const_cols = [col for col in const_cols
-              if col not in id_cols + [date_col, target_label, cycle_id_col]]
-df_training = df_training.drop(*const_cols)
-
-# lag features
-no_lag_cols = id_cols + [date_col, target_label, cycle_id_col]
-window = Window.partitionBy(cycle_id_col).orderBy(date_col)
-for col in df_training.columns:
-    if col in no_lag_cols:
-        continue
-    for n in range(num_lags):
-        df_training = df_training.withColumn(
-            col + f"_lag_{n+1}",
-            F.lag(col, offset=n+1).over(window))
-df_training = df_training.dropna().sort(sort_cols)
-
-
-df_training.toPandas().to_csv(TRAINING_FILEPATH, index=False)
-
 spark.stop()
+
+print(f'Columns dropped: {cols_to_drop}')
