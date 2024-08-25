@@ -2,6 +2,8 @@ Updated August 2024
 
 # Machine learning with PySpark: Blackblaze hard drive failure prediction
 
+**Keywords**: PySpark, time series
+
 We provide an end-to-end PySpark example with the 'Blackblaze hard drive failure prediction' example, in which we predict from the S.M.A.R.T. telemetry from a hard drive whether it has failed. The goal of this exercise is to showcase the use of **PySpark** to perform data science tasks on a real dataset: from EDA, date cleaning and preprocessing, to feature engineering and scaling, ML model training, to inference.
 
 ## In this repo
